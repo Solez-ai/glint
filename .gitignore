@@ -1,0 +1,52 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
+.vscode/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+
+# Build artifacts
+*.o
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.so
+*.dylib
+*.dll
+
+# Cargo files
+Cargo.lock
+
+# Application data
+glint.db
+thumbnail_cache/
+user_data/
+
+# Build output
+dist/
+build/
+out/
+
+# Windows specific
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Temp files
+tmp/
+testing/
+temp/
