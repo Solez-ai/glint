@@ -45,6 +45,17 @@ This is where Glint really shines. It registers itself as the default viewer for
 
 There's also a context menu entry for folders so you can browse an entire directory of photos at once. The app auto-starts with Windows so it's always ready. It syncs with your Windows dark/light mode preference automatically.
 
+### See it For yourself
+
+<p align="center">
+  <img src="assets/427shots_so.png" width="500" alt="First Screenshot">
+  <br><br>
+  <img src="assets/493_1x_shots_so.png" width="500" alt="Second Screenshot">
+  <br><br>
+  <img src="assets/885_1x_shots_so.png" width="500" alt="Third Screenshot">
+</p>
+
+
 ### Hidden features and shortcuts
 
 Some things are discoverable, some are tucked away:
