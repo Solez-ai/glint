@@ -8,7 +8,8 @@ use crate::image::ImageCache;
 use crate::image::ImageProcessor;
 use crate::metadata::MetadataCache;
 use crate::thumbnail::ThumbnailCache;
-use crate::ui::{AppTheme, GalleryPanel, ToolbarPanel, ViewerPanel};
+use crate::image::GlintImage;
+use crate::ui::{AppTheme, GalleryPanel, IconCache, ToolbarPanel, ViewerPanel};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use egui::{Context, FontId};
 use std::path::PathBuf;
@@ -20,6 +21,7 @@ use std::os::windows::process::CommandExt;
 /// Messages sent between components of Glint
 pub enum AppMessage {
     OpenFile(PathBuf),
+    ImageLoaded(GlintImage),
     OpenDirectory(PathBuf),
     NextImage,
     PreviousImage,
@@ -75,6 +77,7 @@ pub struct GlintApp {
     show_set_default_banner: bool,
     setting_default: bool,
     gallery_scanned: bool,
+    icons: Option<IconCache>,
 }
 
 impl GlintApp {
@@ -117,6 +120,7 @@ impl GlintApp {
             show_set_default_banner: !is_default,
             setting_default: false,
             gallery_scanned: false,
+            icons: None,
         }
     }
 
@@ -125,16 +129,33 @@ impl GlintApp {
             match msg {
                 AppMessage::OpenFile(path) => {
                     log::info!("Opening file: {:?}", path);
-                    if let Err(e) = self.image_cache.load(&path) {
-                        log::error!("Failed to load image: {}", e);
+
+                    // Scan the parent directory so prev/next arrows have files to navigate
+                    if self.file_browser.is_empty()
+                        || !self.file_browser.files().iter().any(|f| f == &path)
+                    {
+                        if let Some(parent) = path.parent() {
+                            if parent.is_dir() {
+                                self.file_browser.open_directory(parent);
+                                self.gallery.set_items(self.file_browser.files().to_vec());
+                                self.viewer.set_gallery_items(
+                                    self.file_browser.files().to_vec(),
+                                );
+                            }
+                        }
                     }
-                    if let Err(e) = self.metadata_cache.load(&path) {
-                        log::warn!("Failed to load metadata: {}", e);
-                    }
-                    // Sync file_browser index to match the opened file
+
+                    // Sync file_browser index to the opened file
                     if let Some(pos) = self.file_browser.files().iter().position(|f| f == &path) {
                         self.file_browser.set_current_index(pos);
                     }
+
+                    // Load metadata on main thread (fast — reads EXIF headers only)
+                    if let Err(e) = self.metadata_cache.load(&path) {
+                        log::warn!("Failed to load metadata: {}", e);
+                    }
+
+                    // Show the filename and set title immediately (don't wait for decode)
                     self.viewer.set_image(path.clone());
                     self.window_title = format!(
                         "Glint - {}",
@@ -146,6 +167,24 @@ impl GlintApp {
                         self.window_title.clone(),
                     ));
                     ctx.request_repaint();
+
+                    // Decode the image on a background thread so the UI stays responsive.
+                    let tx = self.tx.clone();
+                    let load_path = path.clone();
+                    std::thread::spawn(move || {
+                        match crate::image::ImageLoader::load(&load_path) {
+                            Ok(image) => {
+                                let _ = tx.send(AppMessage::ImageLoaded(image));
+                            }
+                            Err(e) => {
+                                log::error!(
+                                    "Failed to decode image {:?}: {}",
+                                    load_path,
+                                    e
+                                );
+                            }
+                        }
+                    });
                 }
                 AppMessage::OpenDirectory(path) => {
                     log::info!("Opening directory: {:?}", path);
@@ -259,6 +298,13 @@ impl GlintApp {
                             }
                         }
                     }
+                }
+                AppMessage::ImageLoaded(image) => {
+                    // Image finished decoding on background thread — insert into cache
+                    let path = image.path.clone();
+                    self.image_cache.insert(path.clone(), image);
+                    self.viewer.set_loading(false);
+                    ctx.request_repaint();
                 }
                 AppMessage::CopyToClipboard => {
                     // Copy first selected path to clipboard via egui
@@ -626,6 +672,12 @@ impl eframe::App for GlintApp {
             }
         }
 
+        // Initialize icon cache on first frame (needs egui context)
+        if self.icons.is_none() {
+            let size = 18.0;
+            self.icons = Some(IconCache::new(ctx, size));
+        }
+
         // Phase 1: Render toolbar
         let tx = &self.tx;
         let theme_name = match self.theme {
@@ -633,11 +685,17 @@ impl eframe::App for GlintApp {
             AppTheme::Light => "Light",
             AppTheme::Amoled => "Amoled",
         };
+        let text_color = self.theme.text_color();
         egui::TopBottomPanel::top("toolbar")
             .min_height(40.0)
-                        .frame(egui::Frame::NONE.fill(self.theme.surface_color()))
+            .frame(egui::Frame::NONE
+                .fill(self.theme.surface_color())
+                .stroke(egui::Stroke::new(1.0, self.theme.text_secondary_color().gamma_multiply(0.15)))
+            )
             .show(ctx, |ui| {
-                self.toolbar.render(ui, tx, theme_name);
+                if let Some(ref icons) = self.icons {
+                    self.toolbar.render(ui, tx, icons, theme_name, text_color);
+                }
             });
 
         // Phase 2: Editor panel (right side)

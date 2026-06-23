@@ -48,6 +48,8 @@ pub struct ViewerPanel {
     /// Pending navigation actions (set by viewer, consumed by app)
     pending_nav_prev: bool,
     pending_nav_next: bool,
+    /// Whether the image is still being decoded on a background thread
+    loading: bool,
     /// Cached egui texture handle for the currently displayed photo
     current_image_texture: Option<TextureHandle>,
     /// Filmstrip horizontal scroll offset
@@ -84,6 +86,7 @@ impl ViewerPanel {
             thumb_zoom: 1.0,
             pending_nav_prev: false,
             pending_nav_next: false,
+            loading: false,
             current_image_texture: None,
             filmstrip_offset: 0.0,
             filmstrip_hidden: false,
@@ -91,6 +94,7 @@ impl ViewerPanel {
     }
 
     pub fn set_image(&mut self, path: PathBuf) {
+        self.loading = true;
         self.filename = path
             .file_name()
             .and_then(|n| n.to_str())
@@ -145,6 +149,10 @@ impl ViewerPanel {
 
     pub fn has_image(&self) -> bool {
         self.has_image
+    }
+
+    pub fn set_loading(&mut self, loading: bool) {
+        self.loading = loading;
     }
 
     /// Clear cached thumbnail textures (call when gallery items change)
@@ -509,8 +517,58 @@ impl ViewerPanel {
                         Color32::WHITE,
                     );
                 } else {
-                    // Image not in cache yet — show fallback
+                    // Image not in cache yet — show loading indicator
                     painter.rect_filled(display_rect, 0.0, Color32::from_rgb(30, 30, 30));
+
+                    if self.loading {
+                        // Animated spinner: rotating circle of dots
+                        let time = ctx.input(|i| i.time);
+                        let angle = time * 3.0;
+                        let spinner_r = 12.0;
+                        let cx = display_rect.center().x;
+                        let cy = display_rect.center().y - 20.0;
+                        for i in 0..8 {
+                            let a = angle + i as f64 * 2.0 * std::f64::consts::PI / 8.0;
+                            let px = cx + (spinner_r * a.cos() as f32);
+                            let py = cy + (spinner_r * a.sin() as f32);
+                            let bright = ((i as f32) / 8.0).max(0.2);
+                            let c = Color32::from_rgb(
+                                (70.0 * bright) as u8,
+                                (130.0 * bright) as u8,
+                                (255.0 * bright) as u8,
+                            );
+                            painter.circle_filled(egui::pos2(px, py), 2.5, c);
+                        }
+
+                        painter.text(
+                            egui::pos2(display_rect.center().x, cy + 24.0),
+                            egui::Align2::CENTER_CENTER,
+                            &format!("Loading {}...", self.filename),
+                            egui::FontId::proportional(13.0),
+                            Color32::from_rgb(150, 150, 150),
+                        );
+                    } else {
+                        painter.text(
+                            display_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            &self.filename,
+                            egui::FontId::proportional(14.0),
+                            Color32::from_rgb(180, 180, 180),
+                        );
+                    }
+                }
+            } else {
+                // No image cache provided — fall back to placeholder
+                painter.rect_filled(display_rect, 0.0, Color32::from_rgb(30, 30, 30));
+                if self.loading {
+                    painter.text(
+                        display_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        &format!("Loading {}...", self.filename),
+                        egui::FontId::proportional(14.0),
+                        Color32::from_rgb(150, 150, 150),
+                    );
+                } else {
                     painter.text(
                         display_rect.center(),
                         egui::Align2::CENTER_CENTER,
@@ -519,16 +577,6 @@ impl ViewerPanel {
                         Color32::from_rgb(180, 180, 180),
                     );
                 }
-            } else {
-                // No image cache provided — fall back to placeholder
-                painter.rect_filled(display_rect, 0.0, Color32::from_rgb(30, 30, 30));
-                painter.text(
-                    display_rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    &self.filename,
-                    egui::FontId::proportional(14.0),
-                    Color32::from_rgb(180, 180, 180),
-                );
             }
         }
 

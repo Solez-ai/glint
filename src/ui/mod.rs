@@ -3,14 +3,18 @@
 // Licensed under the MIT License.
 
 mod gallery;
+pub mod icons;
 mod toolbar;
 mod viewer;
 mod window;
 
 pub use gallery::GalleryPanel;
+pub use icons::IconCache;
 pub use toolbar::ToolbarPanel;
 pub use viewer::ViewerPanel;
 pub use window::AppTheme;
+
+pub use icons::Icon;
 
 /// Theming constants for the Glint UI
 pub mod theme {

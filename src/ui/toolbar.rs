@@ -3,10 +3,11 @@
 // Licensed under the MIT License.
 
 use crate::app::AppMessage;
+use crate::ui::icons::{Icon, IconCache};
 use crossbeam_channel::Sender;
-use egui::{Button, Color32, RichText, Vec2};
+use egui::{Color32, Vec2, RichText};
 
-/// The main toolbar panel rendered at the top of the application
+/// Main toolbar panel with Unicode icons
 pub struct ToolbarPanel {
     pub is_gallery_active: bool,
     pub is_editor_active: bool,
@@ -20,13 +21,20 @@ impl ToolbarPanel {
         }
     }
 
-    /// Render the toolbar
-    pub fn render(&mut self, ui: &mut egui::Ui, tx: &Sender<AppMessage>, theme_cycle: &str) {
+    pub fn render(
+        &mut self,
+        ui: &mut egui::Ui,
+        tx: &Sender<AppMessage>,
+        icons: &IconCache,
+        theme_name: &str,
+        text_color: Color32,
+    ) {
         ui.horizontal(|ui| {
             ui.set_min_height(40.0);
+            ui.add_space(8.0);
 
-            // File operations
-            if self.icon_tool_button(ui, "+", "Open File (Ctrl+O)").clicked() {
+            // --- File operations ---
+            if icons.icon_button_sized(ui, &Icon::Open, text_color, Vec2::new(36.0, 28.0), "Open File (Ctrl+O)").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("Images", &[
                         "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif",
@@ -37,43 +45,51 @@ impl ToolbarPanel {
                     let _ = tx.send(AppMessage::OpenFile(path));
                 }
             }
-            if self.icon_tool_button(ui, "--", "Open Folder (Ctrl+D)").clicked() {
+            if icons.icon_button_sized(ui, &Icon::Folder, text_color, Vec2::new(36.0, 28.0), "Open Folder (Ctrl+D)").clicked() {
                 if let Some(path) = rfd::FileDialog::new().pick_folder() {
                     let _ = tx.send(AppMessage::OpenDirectory(path));
                 }
             }
 
             ui.separator();
+            ui.add_space(4.0);
 
-            // Navigation controls
-            if self.icon_tool_button(ui, "<", "Previous").clicked() {
+            // --- Navigation ---
+            if icons.icon_button_sized(ui, &Icon::Prev, text_color, Vec2::new(30.0, 28.0), "Previous (Left Arrow)").clicked() {
                 let _ = tx.send(AppMessage::PreviousImage);
             }
-            if self.icon_tool_button(ui, ">", "Next").clicked() {
+            if icons.icon_button_sized(ui, &Icon::Next, text_color, Vec2::new(30.0, 28.0), "Next (Right Arrow)").clicked() {
                 let _ = tx.send(AppMessage::NextImage);
             }
 
+            ui.add_space(4.0);
             ui.separator();
+            ui.add_space(4.0);
 
-            // Zoom controls
-            if self.icon_tool_button(ui, "/+", "Zoom In").clicked() {
+            // --- Zoom ---
+            if icons.icon_button_sized(ui, &Icon::ZoomIn, text_color, Vec2::new(30.0, 28.0), "Zoom In (Ctrl++)").clicked() {
                 let _ = tx.send(AppMessage::ZoomIn);
             }
-            if self.icon_tool_button(ui, "/-", "Zoom Out").clicked() {
+            if icons.icon_button_sized(ui, &Icon::ZoomOut, text_color, Vec2::new(30.0, 28.0), "Zoom Out (Ctrl+-)").clicked() {
                 let _ = tx.send(AppMessage::ZoomOut);
             }
-            if self.icon_tool_button(ui, "=1", "Fit to View").clicked() {
+            if icons.icon_button_sized(ui, &Icon::Fit, text_color, Vec2::new(36.0, 28.0), "Fit to View (Ctrl+0)").clicked() {
                 let _ = tx.send(AppMessage::ZoomFit);
             }
-            if self.icon_tool_button(ui, "1:1", "Actual Size").clicked() {
+            if ui.add(
+                egui::Button::new(egui::RichText::new("1:1").size(11.0))
+                    .min_size(Vec2::new(36.0, 28.0)),
+            ).on_hover_text("Actual Size (Ctrl+1)").clicked() {
                 let _ = tx.send(AppMessage::ZoomActual);
             }
 
+            ui.add_space(4.0);
             ui.separator();
+            ui.add_space(4.0);
 
-            // View controls
-            let gallery_btn = self.toggle_button(ui, "[=]", "Gallery", self.is_gallery_active);
-            let editor_btn = self.toggle_button(ui, "[&]", "Editor", self.is_editor_active);
+            // --- View toggles ---
+            let gallery_btn = self.icon_toggle_button(ui, &Icon::Gallery, icons, self.is_gallery_active, text_color);
+            let editor_btn = self.icon_toggle_button(ui, &Icon::Editor, icons, self.is_editor_active, text_color);
 
             if gallery_btn.clicked() {
                 self.is_gallery_active = !self.is_gallery_active;
@@ -84,57 +100,57 @@ impl ToolbarPanel {
                 let _ = tx.send(AppMessage::ToggleEditing);
             }
 
-            // Slideshow
-            if self.icon_tool_button(ui, ">>", "Slideshow (F5)").clicked() {
+            if icons.icon_button_sized(ui, &Icon::Slideshow, text_color, Vec2::new(36.0, 28.0), "Slideshow (F5)").clicked() {
                 let _ = tx.send(AppMessage::ToggleSlideshow);
             }
 
+            ui.add_space(4.0);
             ui.separator();
+            ui.add_space(4.0);
 
-            if self.icon_tool_button(ui, "[ ]", "Fullscreen (F11)").clicked() {
+            // --- Display controls ---
+            if icons.icon_button_sized(ui, &Icon::Fullscreen, text_color, Vec2::new(36.0, 28.0), "Fullscreen (F11)").clicked() {
                 let _ = tx.send(AppMessage::ToggleFullscreen);
             }
 
-            // Right side: theme toggle (NOW WORKS)
+            if icons.icon_button_sized(ui, &Icon::RotateLeft, text_color, Vec2::new(30.0, 28.0), "Rotate Left ([)").clicked() {
+                let _ = tx.send(AppMessage::RotateLeft);
+            }
+            if icons.icon_button_sized(ui, &Icon::RotateRight, text_color, Vec2::new(30.0, 28.0), "Rotate Right (])").clicked() {
+                let _ = tx.send(AppMessage::RotateRight);
+            }
+
+            // Right side: theme toggle
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let theme_icon = match theme_cycle {
-                    "Dark" => "(*)",
-                    "Light" => "(O)",
-                    "Amoled" => "(-)",
-                    _ => "(*)",
+                ui.add_space(4.0);
+                let theme_icon = match theme_name {
+                    "Dark" => &Icon::ThemeDark,
+                    "Light" => &Icon::ThemeLight,
+                    _ => &Icon::ThemeDark,
                 };
-                if self.icon_tool_button(ui, theme_icon, "Toggle Theme (Ctrl+T)").clicked() {
+                if icons.icon_button_sized(ui, theme_icon, text_color, Vec2::new(36.0, 28.0), format!("Theme: {}  (Ctrl+T)", theme_name).as_str()).clicked() {
                     let _ = tx.send(AppMessage::ToggleTheme);
                 }
+                ui.add_space(4.0);
             });
+
+            ui.add_space(8.0);
         });
     }
 
-    /// Create an icon-based toolbar button with hover tooltip
-    fn icon_tool_button(&self, ui: &mut egui::Ui, icon: &str, tooltip: &str) -> egui::Response {
-        ui.add(
-            Button::new(RichText::new(icon).size(13.0))
-                .min_size(Vec2::new(32.0, 28.0)),
-        )
-        .on_hover_text(tooltip)
-    }
-
-    /// Create a toggle button with icon
-    fn toggle_button(&self, ui: &mut egui::Ui, icon: &str, label: &str, active: bool) -> egui::Response {
-        let text = format!("{} {}", icon, if active { "X" } else { label });
-        if active {
-            ui.add(
-                Button::new(RichText::new(&text).size(12.0).color(Color32::WHITE))
-                    .min_size(Vec2::new(48.0, 28.0))
-                    .fill(Color32::from_rgb(70, 130, 255)),
-            )
-            .on_hover_text(label)
-        } else {
-            ui.add(
-                Button::new(RichText::new(&text).size(12.0))
-                    .min_size(Vec2::new(48.0, 28.0)),
-            )
-            .on_hover_text(label)
-        }
+    fn icon_toggle_button(
+        &self,
+        ui: &mut egui::Ui,
+        icon: &Icon,
+        icons: &IconCache,
+        active: bool,
+        tint: Color32,
+    ) -> egui::Response {
+        let text = RichText::new(icon.symbol())
+            .size(icons.icon_size().x + 4.0)
+            .color(tint)
+            .strong();
+        let btn = egui::Button::new(text).selected(active);
+        ui.add_sized(Vec2::new(42.0, 28.0), btn)
     }
 }
